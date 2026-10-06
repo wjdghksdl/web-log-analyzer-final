@@ -28,7 +28,14 @@
 
 ### 2. 상관 분석과 공격 흐름 탐지
 
-탐지된 이벤트를 공격 유형별로 묶어 분석하고, 같은 IP에서 여러 유형의 공격이 이어진 경우 하나의 공격 흐름(attack chain)으로 탐지합니다.
+탐지된 이벤트를 IP별로 묶어 어떤 유형의 공격이 몇 건 발생했는지 정리합니다. 또한 공격 유형을 정찰(Reconnaissance), 공격 시도(Exploitation), 인증 공격(Credential Attack), 가용성 공격(Availability Attack) 단계로 분류하고, 같은 IP에서 서로 다른 단계의 탐지가 2개 이상 나오면 하나의 공격 흐름(attack chain)으로 판단합니다.
+
+| 공격 유형 | 단계 |
+| --- | --- |
+| Web Scanner | Reconnaissance |
+| SQL Injection, Path Traversal | Exploitation |
+| Brute Force | Credential Attack |
+| HTTP Flood | Availability Attack |
 
 ### 3. IP별 위험도 산정
 
@@ -42,26 +49,11 @@ IP마다 탐지 이벤트를 종합해 위험 점수(`risk_score`)와 위험 등
 
 ## 처리 흐름
 
-```
-access.log
-    ↓
-로그 파싱 (parser)
-    ↓
-공격 탐지 (detection)
-    SQL Injection / Path Traversal / Web Scanner / Brute Force / HTTP Flood
-    ↓
-상관 분석 · 공격 흐름 탐지 (correlation)
-    ↓
-IP별 위험도 산정 (risk)
-    ↓
-data/alerts.json 저장
-    ↓
-FastAPI (api)
-```
+access.log를 파싱한 뒤 공격 탐지, 상관 분석, IP별 위험도 산정을 차례로 수행하고, 결과를 `data/alerts.json`에 저장해 FastAPI로 제공합니다.
 
 ### 시스템 구성
 
-![시스템 구성도](docs/images/architecture.png)
+<img width="1727" height="869" alt="image" src="https://github.com/user-attachments/assets/2ce33b8e-c81b-4ea4-b113-b1d754896dbe" />
 
 ---
 
@@ -126,9 +118,9 @@ py -m uvicorn api.app:app --reload
 | --- | --- |
 | `summary` | 분석 로그 수, 탐지 이벤트 수, 탐지 IP 수, 공격 흐름 수 |
 | `alerts` | 탐지된 이벤트 목록 |
-| `risk_results` | IP별 위험 점수, 위험 등급, 탐지 이벤트 수 |
-| `correlation_results` | 공격 유형별 상관 분석 결과 |
-| `attack_chains` | 탐지된 공격 흐름 |
+| `risk_results` | IP별 위험 점수, 위험 등급, 탐지 이벤트 수, 공격 유형 |
+| `correlation_results` | IP별 탐지 이벤트 수와 공격 유형 |
+| `attack_chains` | 공격 흐름이 탐지된 IP, 공격 유형, 해당 단계 |
 
 ---
 
@@ -136,29 +128,30 @@ py -m uvicorn api.app:app --reload
 
 ### API 문서 (Swagger UI)
 
-![API 문서](docs/images/swagger-ui.png)
+<img width="1548" height="660" alt="image" src="https://github.com/user-attachments/assets/27df1f75-7431-4284-8d97-6021497d79d4" />
 
 ### 탐지된 이벤트 (`/api/alerts`)
 
-![탐지 이벤트](docs/images/api-alerts.png)
+<img width="1400" height="600" alt="image" src="https://github.com/user-attachments/assets/f95f29c9-c69b-4da7-91f3-7b337ad6db7f" />
 
 ### IP별 위험도 (`/api/risk`)
 
-![IP별 위험도](docs/images/api-risk.png)
+<img width="1398" height="595" alt="image" src="https://github.com/user-attachments/assets/408ff36e-1c42-4a44-b7f3-f17e618bc870" />
 
 ### 공격 흐름 (`/api/chains`)
 
-![공격 흐름](docs/images/api-chains.png)
+<img width="1406" height="417" alt="image" src="https://github.com/user-attachments/assets/38e30887-402c-4028-8a45-4ae037e9fae9" />
+
 
 ### 터미널 실행 결과
 
-![터미널 실행 결과](docs/images/terminal-output.png)
+<img width="510" height="357" alt="image" src="https://github.com/user-attachments/assets/24d14e32-2a87-4115-9467-9a44ddb0dab6" />
 
 ---
 
 ## 샘플 데이터
 
-`data/access.log`에는 동작 확인용 요청이 들어 있습니다. 관리자 페이지와 설정 파일 경로를 연달아 요청하는 스캐너성 접근, SQL Injection 문자열이 담긴 검색 요청, `../`로 시스템 파일에 접근하려는 요청, 로그인 실패(401)가 반복되는 요청을 포함합니다.
+`data/access.log`에는 동작 확인용 요청이 들어 있습니다. 관리자 페이지와 설정 파일 경로를 연달아 요청하는 스캐너성 접근, SQL Injection 문자열이 담긴 검색 요청, `../`로 시스템 파일에 접근하려는 요청, 로그인 실패(401)가 반복되는 요청을 포함합니다. 한 IP가 스캐너성 요청 뒤에 SQL Injection과 경로 조작을 시도하는 요청도 있으며, 이 IP는 공격 흐름으로 탐지됩니다.
 
 ---
 
